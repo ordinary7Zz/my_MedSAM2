@@ -1,0 +1,21 @@
+# 大模型权重 / 推理输出（必须忽略）
+infer/
+checkpoints/
+logs/
+predictions/
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.tmp
+
+# 系统 & IDE
+.ipynb_checkpoints/
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
