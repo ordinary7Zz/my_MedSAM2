@@ -109,7 +109,7 @@ def evaluate_model(net, dataloader, device):
         print("Warning: No valid Dice values calculated!")
         dice_score = 0.0
     else:
-        dice_score = round(float(np.mean(dice_values)), 4)
+        dice_score = round(float(np.mean(dice_values)), 8)
 
     if len(hd95_values) == 0:
         print("Warning: No valid HD values calculated!")

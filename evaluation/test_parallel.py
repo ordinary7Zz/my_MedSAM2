@@ -113,7 +113,7 @@ def process_dataset(model, image_path, gt_path, save_base_path, dataset_name, de
     dice_score, hd95_score, dice_values, hd95_values = evaluate_model(model, test_loader, device)
     dice_mean, dice_ci_low, dice_ci_high = mean_ci_95(dice_values)
     hd95_mean, hd95_ci_low, hd95_ci_high = mean_ci_95(hd95_values)
-    print(f"Dice Score: {dice_score}, 95% CI: [{dice_ci_low:.4f}, {dice_ci_high:.4f}]")
+    print(f"Dice Score: {dice_score:.8f}, 95% CI: [{dice_ci_low:.4f}, {dice_ci_high:.4f}]")
     print(f"HD95: {hd95_score}, 95% CI: [{hd95_ci_low:.4f}, {hd95_ci_high:.4f}]")
     
     # 保存预测结果（如果需要）
@@ -275,7 +275,7 @@ def main():
     print("\n===== Summary of All Datasets =====")
     for dataset_name, dice, hd95, dice_ci, hd95_ci in all_metrics:
         print(f"Dataset: {dataset_name}")
-        print(f"  Dice Score: {dice}")
+        print(f"  Dice Score: {dice:.8f}")
         print(f"  Dice 95% CI: [{dice_ci[1]:.4f}, {dice_ci[2]:.4f}]")
         print(f"  HD95: {hd95}")
         print(f"  HD95 95% CI: [{hd95_ci[1]:.4f}, {hd95_ci[2]:.4f}]")
