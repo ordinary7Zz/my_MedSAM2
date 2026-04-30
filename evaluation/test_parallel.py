@@ -46,6 +46,18 @@ def clean_path(path):
         path = path.strip()
     return path
 
+def mean_ci_95(values):
+    values = np.asarray(values, dtype=np.float64)
+    if values.size == 0:
+        return 0.0, 0.0, 0.0
+    mean = float(np.mean(values))
+    if values.size == 1:
+        return mean, mean, mean
+    std = float(np.std(values, ddof=1))
+    margin = 1.96 * std / np.sqrt(values.size)
+    return mean, mean - margin, mean + margin
+
+
 def process_dataset(model, image_path, gt_path, save_base_path, dataset_name, device, save_results):
     # Create save directory for this dataset
     save_path = os.path.join(save_base_path, dataset_name)
@@ -64,11 +76,11 @@ def process_dataset(model, image_path, gt_path, save_base_path, dataset_name, de
     # Check path existence before loading dataset
     if not os.path.exists(image_path):
         print(f"Error: Image directory does not exist: {image_path}")
-        return 0.0, 0.0
-    
+        return 0.0, 0.0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)
+
     if not os.path.exists(gt_path):
         print(f"Error: Mask directory does not exist: {gt_path}")
-        return 0.0, 0.0
+        return 0.0, 0.0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)
     
     # List directory contents for debugging
     try:
@@ -89,7 +101,7 @@ def process_dataset(model, image_path, gt_path, save_base_path, dataset_name, de
     # 检查数据集是否为空
     if len(test_dataset) == 0:
         print(f"Error: Test dataset {dataset_name} is empty!")
-        return 0.0, 0.0
+        return 0.0, 0.0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)
     
     test_loader = DataLoader(test_dataset, shuffle=False, batch_size=1)
     print(f"Dataset loaded: {len(test_dataset)} images found")
@@ -97,9 +109,12 @@ def process_dataset(model, image_path, gt_path, save_base_path, dataset_name, de
     # 计算评估指标
     print(f"Calculating evaluation metrics for dataset: {dataset_name}")
     
-    # 计算Dice分数
-    dice_score, hd95_score = evaluate_model(model, test_loader, device)
-    print(f"Dice Score: {dice_score}, HD95: {hd95_score}")
+    # 计算Dice分数和95%置信区间
+    dice_score, hd95_score, dice_values, hd95_values = evaluate_model(model, test_loader, device)
+    dice_mean, dice_ci_low, dice_ci_high = mean_ci_95(dice_values)
+    hd95_mean, hd95_ci_low, hd95_ci_high = mean_ci_95(hd95_values)
+    print(f"Dice Score: {dice_score}, 95% CI: [{dice_ci_low:.4f}, {dice_ci_high:.4f}]")
+    print(f"HD95: {hd95_score}, 95% CI: [{hd95_ci_low:.4f}, {hd95_ci_high:.4f}]")
     
     # 保存预测结果（如果需要）
     if save_results.lower() == "true":
@@ -132,7 +147,7 @@ def process_dataset(model, image_path, gt_path, save_base_path, dataset_name, de
                     print(f"Error saving prediction for {name}: {e}")
     print(f"Dataset {dataset_name} processing completed.")
     
-    return dice_score, hd95_score
+    return dice_score, hd95_score, (dice_mean, dice_ci_low, dice_ci_high), (hd95_mean, hd95_ci_low, hd95_ci_high)
 
 def main():
     # 解析命令行参数
@@ -250,18 +265,20 @@ def main():
             dataset_name = f"Test_Set_{i+1}"
         
         print(f"\nProcessing dataset {i+1}/{len(args.test_image_paths)}")
-        dice, hd95 = process_dataset(model, img_path, gt_path, args.save_path, dataset_name, device, args.save_results)
-        all_metrics.append((dataset_name, dice, hd95))
+        dice, hd95, dice_ci, hd95_ci = process_dataset(model, img_path, gt_path, args.save_path, dataset_name, device, args.save_results)
+        all_metrics.append((dataset_name, dice, hd95, dice_ci, hd95_ci))
     
     total_time = time.time() - start_time
     print(f"All datasets processed in {total_time:.2f} seconds")
     
     # Print summary of all datasets
     print("\n===== Summary of All Datasets =====")
-    for dataset_name, dice, hd95 in all_metrics:
+    for dataset_name, dice, hd95, dice_ci, hd95_ci in all_metrics:
         print(f"Dataset: {dataset_name}")
         print(f"  Dice Score: {dice}")
+        print(f"  Dice 95% CI: [{dice_ci[1]:.4f}, {dice_ci[2]:.4f}]")
         print(f"  HD95: {hd95}")
+        print(f"  HD95 95% CI: [{hd95_ci[1]:.4f}, {hd95_ci[2]:.4f}]")
     
     print("\nAll datasets processing completed successfully!")
     print(f"Log file location: {log_file}")

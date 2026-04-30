@@ -60,73 +60,61 @@ class HD95(nn.Module):
 def evaluate_model(net, dataloader, device):
     """
     Evaluate the model on both Dice coefficient and HD95 metric in a single inference pass.
-    Returns: (dice_score, hd95_score)
+    Returns: (dice_score, hd95_score, dice_values, hd95_values)
     """
     net.eval()
-    num_val_batches = len(dataloader)
     dice_calculator = Dice()
     hd_calculator = HD95()
-    
-    dice_score_total = 0
-    all_hd_values = []
-    num_samples = 0
+
+    dice_values = []
+    hd95_values = []
 
     for batch in dataloader:
         try:
-            # 处理不同的批处理格式
             if isinstance(batch, dict):
                 image = batch['image']
                 mask_true = batch['label']
             else:
-                # 支持非字典格式的批处理
                 image = batch[0]
                 mask_true = batch[1]
             image = image.to(device=device)
             mask_true = mask_true.to(device=device)
             batch_size = image.size(0)
-            num_samples += batch_size
-            
+
             with torch.no_grad():
-                # 单次模型推断
                 try:
                     mask_pred = net(image, batch=batch)
                 except TypeError:
                     mask_pred = net(image)
                 if isinstance(mask_pred, list):
                     mask_pred = mask_pred[0]
-                mask_pred = F.sigmoid(mask_pred)  
-                
-                # 准备用于Dice计算的二值掩码
+                mask_pred = F.sigmoid(mask_pred)
                 mask_pred_binary = (mask_pred > 0.5).float()
-                # 计算整个批次的Dice分数
-                dice_score_total += dice_calculator(mask_pred_binary, mask_true)
-                
-                # 对每个样本单独计算HD95
+
                 for i in range(batch_size):
                     try:
-                        # 使用已经二值化的预测结果
                         pred_mask = mask_pred_binary[i]
                         true_mask = (mask_true[i] > 0.5).float()
-                        hausdorff_distance = hd_calculator(pred_mask, true_mask).item()
-                        all_hd_values.append(hausdorff_distance)
+                        dice_value = dice_calculator(pred_mask, true_mask).item()
+                        hd95_value = hd_calculator(pred_mask, true_mask).item()
+                        dice_values.append(dice_value)
+                        hd95_values.append(hd95_value)
                     except Exception as e:
-                        print(f"Error calculating HD for sample {i}: {e}")
+                        print(f"Error calculating metrics for sample {i}: {e}")
         except Exception as e:
-            # 整批处理失败时的处理
             print(f"Error processing batch: {e}")
             continue
 
-    # 计算平均Dice分数
-    if num_val_batches == 0:
+    if len(dice_values) == 0:
+        print("Warning: No valid Dice values calculated!")
         dice_score = 0.0
     else:
-        dice_score = round(dice_score_total.cpu().item() / num_val_batches, 4)
-    
-    # 计算平均HD95分数
-    if len(all_hd_values) == 0:
+        dice_score = round(float(np.mean(dice_values)), 4)
+
+    if len(hd95_values) == 0:
         print("Warning: No valid HD values calculated!")
         hd95_score = 0.0
     else:
-        hd95_score = round(np.mean(all_hd_values), 4)
-    
-    return dice_score, hd95_score
+        hd95_score = round(float(np.mean(hd95_values)), 4)
+
+    return dice_score, hd95_score, dice_values, hd95_values
