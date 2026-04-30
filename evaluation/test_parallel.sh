@@ -14,16 +14,28 @@ DINO_UNET_CKPT="/mnt/wangbd8/workspace/ThyroidAgent/dino_unet_ori/checkpoints/tr
 # 测试数据集名称数组
 TEST_DATASET_NAMES=(
     "TN3K"
+    "ThyroidXL"
+    "PKTN"
+    "TN5K"
+    "DDTI"
 )
 
 # 测试图像路径数组
 TEST_IMAGE_PATHS=(
-    "/mnt/wangbd8/workspace/ThyroidAgent/MedSAM2/evaluation/test_images/"
+    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TN3K/test/images/"
+    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/ThyroidXL/test/images/"
+    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/PKTN/test/images/"
+    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TN5K/test/images/"
+    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/DDTI/test/images/"
 )
 
 # 测试掩码路径数组
 TEST_MASK_PATHS=(
-    "/mnt/wangbd8/workspace/ThyroidAgent/MedSAM2/evaluation/test_masks/"
+    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TN3K/test/masks/"
+    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/ThyroidXL/test/masks/"
+    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/PKTN/test/masks/"
+    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TN5K/test/masks/"
+    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/DDTI/test/masks/"
 )
 
 # Ensure arrays have the same length
