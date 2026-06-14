@@ -13,6 +13,7 @@ DINO_UNET_CKPT="/mnt/wangbd8/workspace/ThyroidAgent/dino_unet_ori/checkpoints/tr
 # Configure multiple test dataset paths
 # 测试数据集名称数组
 TEST_DATASET_NAMES=(
+    "Augtrain"
     "TN3K"
     "ThyroidXL"
     "PKTN"
@@ -22,6 +23,7 @@ TEST_DATASET_NAMES=(
 
 # 测试图像路径数组
 TEST_IMAGE_PATHS=(
+    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/augtrain_PNG/image/"
     "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TN3K/test/images/"
     "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/ThyroidXL/test/images/"
     "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/PKTN/test/images/"
@@ -31,6 +33,7 @@ TEST_IMAGE_PATHS=(
 
 # 测试掩码路径数组
 TEST_MASK_PATHS=(
+    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/augtrain_PNG/mask/"
     "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TN3K/test/masks/"
     "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/ThyroidXL/test/masks/"
     "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/PKTN/test/masks/"
