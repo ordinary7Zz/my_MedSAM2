@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
+from typing import Optional
 from sam2.build_sam import build_sam2
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 from dino_unet import DINOv3_S_UNet
@@ -62,6 +63,21 @@ def sample_uniformly(y_coords, x_coords, num_samples):
     
     return sampled_points[:num_samples]
 
+
+def _mask_to_box(mask_bin: np.ndarray, pad: int = 4) -> Optional[np.ndarray]:
+    if mask_bin.sum() == 0:
+        return None
+    ys, xs = np.where(mask_bin > 0)
+    x0, x1 = int(xs.min()), int(xs.max())
+    y0, y1 = int(ys.min()), int(ys.max())
+    H, W = mask_bin.shape
+    x0 = max(0, x0 - pad)
+    y0 = max(0, y0 - pad)
+    x1 = min(W - 1, x1 + pad)
+    y1 = min(H - 1, y1 + pad)
+    return np.array([x0, y0, x1, y1], dtype=np.float32)
+
+
 class MedSAM2SegWrapper:
     def __init__(
         self,
@@ -105,57 +121,51 @@ class MedSAM2SegWrapper:
                 H, W = img_np.shape[:2]
                 self.predictor.set_image(img_np)
 
-                # 使用DINO-UNet预测前景区域，然后从中提取前景和背景点
-                point_coords = None
-                point_labels = None
+                # 使用DINO-UNet预测前景区域，并将其二值mask转为box prompt
+                box = None
                 label_map = batch['label'][i][0].cpu().numpy()
 
                 if self.dino_unet_model is not None:
                     dino_input = img_processed.unsqueeze(0).to(self.device)
                     dino_logits = self.dino_unet_model(dino_input).squeeze(0).squeeze(0)
                     dino_prob = torch.sigmoid(dino_logits).detach().cpu().numpy().astype(np.float32)
-                    # === 二值化对比分析 ===
                     dino_bin = (dino_prob > 0.5).astype(np.uint8)
+
+                    # === 二值化对比分析 ===
                     label_bin = (label_map > 0.5).astype(np.uint8)
                     intersection = np.logical_and(dino_bin, label_bin).sum()
                     union = np.logical_or(dino_bin, label_bin).sum()
                     dice = 2 * intersection / (dino_bin.sum() + label_bin.sum() + 1e-6)
                     print(f"[DINO vs Label] Sample {i}: Dice={dice:.4f}, DINO sum={dino_bin.sum()}, Label sum={label_bin.sum()}, Intersection={intersection}, Union={union}")
 
-                    # 提取前景点（从概率大于0.7的区域均匀选择）
-                    ys_foreground, xs_foreground = np.where(dino_prob > 0.5)
-                    foreground_points = []
-                    if len(xs_foreground) > 0:
-                        num_foreground = min(5, len(xs_foreground))
-                        foreground_points = sample_uniformly(ys_foreground, xs_foreground, num_foreground)
-                    
-                    # 提取背景点（从概率小于0.3的区域均匀选择）
-                    ys_background, xs_background = np.where(dino_prob < 0.5)
-                    background_points = []
-                    if len(xs_background) > 0:
-                        num_background = min(3, len(xs_background))
-                        background_points = sample_uniformly(ys_background, xs_background, num_background)
-                    
-                    # 合并前景和背景点
-                    if foreground_points or background_points:
-                        all_points = foreground_points + background_points
-                        point_coords = np.array(all_points, dtype=np.float32)
-                        point_labels = np.array([1]*len(foreground_points) + [0]*len(background_points), dtype=np.int32)
-                
-                # 如果没有足够的点，使用图像中心作为前景点，四角作为背景点
-                if point_coords is None or len(point_coords) < 1:
+                    box = _mask_to_box(dino_bin, pad=4)
+
+                # 如果 DINO 没有提供有效框，就退回到中心点提示
+                point_coords = None
+                point_labels = None
+                if box is None:
                     center_x, center_y = W // 2, H // 2
                     point_coords = np.array([[center_x, center_y]], dtype=np.float32)
                     point_labels = np.array([1], dtype=np.int32)
 
-                # 使用前景和背景点进行推理
-                masks, scores, _ = self.predictor.predict(
-                    point_coords=point_coords,
-                    point_labels=point_labels,
+                # 使用 box prompt 进行推理（fallback 为中心点）
+                predict_kwargs = dict(
                     multimask_output=False,
                     return_logits=False,
-                    normalize_coords=True
+                    normalize_coords=True,
                 )
+                if box is not None:
+                    box_norm = box.astype(np.float32).copy()[None, :]
+                    box_norm[:, 0] /= max(W, 1)
+                    box_norm[:, 2] /= max(W, 1)
+                    box_norm[:, 1] /= max(H, 1)
+                    box_norm[:, 3] /= max(H, 1)
+                    predict_kwargs["box"] = box_norm
+                else:
+                    predict_kwargs["point_coords"] = point_coords
+                    predict_kwargs["point_labels"] = point_labels
+
+                masks, scores, _ = self.predictor.predict(**predict_kwargs)
 
                 best_mask = masks[np.argmax(scores)]
                 print(f"[Debug] best_mask min: {best_mask.min()}, max: {best_mask.max()}, unique values: {np.unique(best_mask)}")
@@ -173,7 +183,8 @@ class MedSAM2SegWrapper:
                 import time
                 ts = int(time.time())
                 Image.fromarray(img_np).save("debug_img.png")
-                Image.fromarray((dino_bin*255).astype(np.uint8)).save("debug_dino.png")
+                if self.dino_unet_model is not None:
+                    Image.fromarray((dino_bin*255).astype(np.uint8)).save("debug_dino.png")
                 Image.fromarray((best_mask_bin*255).astype(np.uint8)).save("debug_sam.png")
                 Image.fromarray((label_bin*255).astype(np.uint8)).save("debug_gt.png")
 
