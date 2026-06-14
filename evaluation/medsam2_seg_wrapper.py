@@ -117,7 +117,6 @@ class MedSAM2SegWrapper:
                 img_tensor = batch["image_rgb"][i]
                 img_processed = batch["image"][i]
                 img_np = (img_tensor.permute(1, 2, 0).cpu().numpy() * 255.0).astype(np.uint8)
-                print(f"[Debug] img_np min: {img_np.min()}, max: {img_np.max()}")
                 H, W = img_np.shape[:2]
                 self.predictor.set_image(img_np)
 
@@ -136,7 +135,6 @@ class MedSAM2SegWrapper:
                     intersection = np.logical_and(dino_bin, label_bin).sum()
                     union = np.logical_or(dino_bin, label_bin).sum()
                     dice = 2 * intersection / (dino_bin.sum() + label_bin.sum() + 1e-6)
-                    print(f"[DINO vs Label] Sample {i}: Dice={dice:.4f}, DINO sum={dino_bin.sum()}, Label sum={label_bin.sum()}, Intersection={intersection}, Union={union}")
 
                     box = _mask_to_box(dino_bin, pad=4)
 
@@ -168,7 +166,6 @@ class MedSAM2SegWrapper:
                 masks, scores, _ = self.predictor.predict(**predict_kwargs)
 
                 best_mask = masks[np.argmax(scores)]
-                print(f"[Debug] best_mask min: {best_mask.min()}, max: {best_mask.max()}, unique values: {np.unique(best_mask)}")
                 
                 # === best_mask与label_map二值化对比分析 ===
                 best_mask_bin = (best_mask).astype(np.uint8)
@@ -191,7 +188,6 @@ class MedSAM2SegWrapper:
                 intersection2 = np.logical_and(best_mask, label_bin).sum()
                 union2 = np.logical_or(best_mask, label_bin).sum()
                 dice2 = 2 * intersection2 / (best_mask.sum() + label_bin.sum() + 1e-6)
-                print(f"[MedSAM2 vs Label] Sample {i}: Dice={dice2:.4f}, MedSAM2 sum={best_mask.sum()}, Label sum={label_bin.sum()}, Intersection={intersection2}, Union={union2}")
 
                 mask_tensor = torch.from_numpy(best_mask).float().unsqueeze(0).to(self.device)
                 results.append(mask_tensor)
