@@ -8,7 +8,7 @@ CUDA_VISIBLE_DEVICES="1"
 CHECKPOINT_PATH="/mnt/wangbd8/workspace/ThyroidAgent/MedSAM2/checkpoints/MedSAM2_latest.pt"
 
 # DINO-UNet configuration
-DINO_UNET_CKPT="/mnt/wangbd8/workspace/ThyroidAgent/dino_unet_ori/checkpoints/train_all_datasets/train_all_datasets/20260314_222200/dino_unet_train_all_datasets_epoch_40.pth"
+DINO_UNET_CKPT="/mnt/wangbd8/workspace/ThyroidAgent/dino_unet_ori/checkpoints/baseline/dino_unet_train_dataset_6_epoch_50.pth"
 
 # Configure multiple test dataset paths
 # 测试数据集名称数组
