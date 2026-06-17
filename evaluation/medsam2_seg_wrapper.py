@@ -4,7 +4,6 @@ import numpy as np
 from typing import Optional
 from sam2.build_sam import build_sam2
 from sam2.sam2_image_predictor import SAM2ImagePredictor
-from dino_unet import DINOv3_S_UNet
 
 def sample_uniformly(y_coords, x_coords, num_samples):
     """在高置信度区域内均匀采样点"""
@@ -88,7 +87,7 @@ class MedSAM2SegWrapper:
     ):
         # 设置设备
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
+
         # 加载MedSAM2模型
         self.sam2_model = build_sam2(
             config_file=sam2_cfg,
@@ -96,17 +95,12 @@ class MedSAM2SegWrapper:
             device=self.device,
             mode="eval"
         )
-        
+
         # 创建图像预测器
         self.predictor = SAM2ImagePredictor(self.sam2_model)
-        
-        # 加载DINO-UNet模型（如果提供了检查点）
+
+        # 保留参数以兼容旧调用，但不再加载 DINO-UNet
         self.dino_unet_model = None
-        if dino_unet_ckpt:
-            self.dino_unet_model = DINOv3_S_UNet()
-            self.dino_unet_model.load_state_dict(torch.load(dino_unet_ckpt, map_location=self.device))
-            self.dino_unet_model.to(self.device)
-            self.dino_unet_model.eval()
     
     def __call__(self, image, batch=None):
         with torch.no_grad():
@@ -120,25 +114,12 @@ class MedSAM2SegWrapper:
                 H, W = img_np.shape[:2]
                 self.predictor.set_image(img_np)
 
-                # 使用DINO-UNet预测前景区域，并将其二值mask转为box prompt
-                box = None
+                # 使用 GT mask 转换为 box prompt
                 label_map = batch['label'][i][0].cpu().numpy()
+                label_bin = (label_map > 0.5).astype(np.uint8)
+                box = _mask_to_box(label_bin, pad=4)
 
-                if self.dino_unet_model is not None:
-                    dino_input = img_processed.unsqueeze(0).to(self.device)
-                    dino_logits = self.dino_unet_model(dino_input).squeeze(0).squeeze(0)
-                    dino_prob = torch.sigmoid(dino_logits).detach().cpu().numpy().astype(np.float32)
-                    dino_bin = (dino_prob > 0.5).astype(np.uint8)
-
-                    # === 二值化对比分析 ===
-                    label_bin = (label_map > 0.5).astype(np.uint8)
-                    intersection = np.logical_and(dino_bin, label_bin).sum()
-                    union = np.logical_or(dino_bin, label_bin).sum()
-                    dice = 2 * intersection / (dino_bin.sum() + label_bin.sum() + 1e-6)
-
-                    box = _mask_to_box(dino_bin, pad=4)
-
-                # 如果 DINO 没有提供有效框，就退回到中心点提示
+                # 如果 mask 为空，就退回到中心点提示
                 point_coords = None
                 point_labels = None
                 if box is None:
@@ -153,12 +134,7 @@ class MedSAM2SegWrapper:
                     normalize_coords=True,
                 )
                 if box is not None:
-                    box_norm = box.astype(np.float32).copy()[None, :]
-                    box_norm[:, 0] /= max(W, 1)
-                    box_norm[:, 2] /= max(W, 1)
-                    box_norm[:, 1] /= max(H, 1)
-                    box_norm[:, 3] /= max(H, 1)
-                    predict_kwargs["box"] = box_norm
+                    predict_kwargs["box"] = box[None, :].astype(np.float32)
                 else:
                     predict_kwargs["point_coords"] = point_coords
                     predict_kwargs["point_labels"] = point_labels
@@ -166,29 +142,6 @@ class MedSAM2SegWrapper:
                 masks, scores, _ = self.predictor.predict(**predict_kwargs)
 
                 best_mask = masks[np.argmax(scores)]
-                
-                # === best_mask与label_map二值化对比分析 ===
-                best_mask_bin = (best_mask).astype(np.uint8)
-                label_bin = (label_map).astype(np.uint8)
-
-                # 保存best_mask_bin和label_bin到plot目录
-                import os
-                from PIL import Image
-                plot_dir = "plot"
-                os.makedirs(plot_dir, exist_ok=True)
-                # 使用时间戳区分文件名
-                import time
-                ts = int(time.time())
-                Image.fromarray(img_np).save("debug_img.png")
-                if self.dino_unet_model is not None:
-                    Image.fromarray((dino_bin*255).astype(np.uint8)).save("debug_dino.png")
-                Image.fromarray((best_mask_bin*255).astype(np.uint8)).save("debug_sam.png")
-                Image.fromarray((label_bin*255).astype(np.uint8)).save("debug_gt.png")
-
-                intersection2 = np.logical_and(best_mask, label_bin).sum()
-                union2 = np.logical_or(best_mask, label_bin).sum()
-                dice2 = 2 * intersection2 / (best_mask.sum() + label_bin.sum() + 1e-6)
-
                 mask_tensor = torch.from_numpy(best_mask).float().unsqueeze(0).to(self.device)
                 results.append(mask_tensor)
             

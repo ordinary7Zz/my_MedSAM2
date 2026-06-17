@@ -248,10 +248,7 @@ def main():
             dino_unet_ckpt=clean_path(args.dino_unet_ckpt) if args.dino_unet_ckpt else None
         )
         print("MedSAM2 model loaded.")
-        if args.dino_unet_ckpt:
-            print("Prompt mode: DINO-UNet enabled, using DINO mask -> box prompt for MedSAM2.")
-        else:
-            print("Prompt mode: DINO-UNet disabled, using center-point fallback for MedSAM2.")
+        print("Prompt mode: using GT mask -> box prompt for MedSAM2.")
     except Exception as e:
         print(f"Error initializing MedSAM2: {e}")
         return
