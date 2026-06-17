@@ -7,9 +7,6 @@ CUDA_VISIBLE_DEVICES="1"
 # Model checkpoint path
 CHECKPOINT_PATH="/mnt/wangbd8/workspace/ThyroidAgent/MedSAM2/checkpoints/MedSAM2_latest.pt"
 
-# DINO-UNet configuration
-DINO_UNET_CKPT="/mnt/wangbd8/workspace/ThyroidAgent/dino_unet_ori/checkpoints/baseline/dino_unet_train_dataset_6_epoch_50.pth"
-
 # Configure multiple test dataset paths
 # 测试数据集名称数组
 TEST_DATASET_NAMES=(
@@ -105,11 +102,6 @@ CMD="python -u \"$SCRIPT_DIR/test_parallel.py\" \
     --save_path \"$SAVE_PATH\" \
     --save_results \"$SAVE_RESULTS\" \
     --log_dir \"$LOG_DIR\""
-
-# Add DINO-UNet checkpoint if specified
-if [ -n "$DINO_UNET_CKPT" ]; then
-    CMD="$CMD --dino_unet_ckpt \"$DINO_UNET_CKPT\""
-fi
 
 echo "Executing command: $CMD"
 eval $CMD

@@ -156,8 +156,6 @@ def main():
                     help="path to the MedSAM2 checkpoint (.pt)")
     parser.add_argument("--sam2_cfg", type=str, default="sam2.1_hiera_t512.yaml",
                         help="SAM2/MedSAM2 config name (e.g. sam2.1_hiera_t512.yaml)")
-    parser.add_argument("--dino_unet_ckpt", type=str, default=None,
-                        help="path to the DINO-UNet checkpoint (.pt)")
     parser.add_argument('--test_image_paths', '--image_paths', type=str, action='append', default=[],
                         help='paths to the test image directories (can be used multiple times)')
     parser.add_argument('--test_gt_paths', '--gt_paths', '--test_mask_paths', type=str, action='append', default=[],
@@ -244,8 +242,7 @@ def main():
         model = MedSAM2SegWrapper(
             sam2_cfg=args.sam2_cfg,
             checkpoint_path=clean_path(args.checkpoint),
-            device=device,
-            dino_unet_ckpt=clean_path(args.dino_unet_ckpt) if args.dino_unet_ckpt else None
+            device=device
         )
         print("MedSAM2 model loaded.")
         print("Prompt mode: using GT mask -> box prompt for MedSAM2.")
