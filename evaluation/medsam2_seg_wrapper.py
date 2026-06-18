@@ -106,18 +106,32 @@ class MedSAM2SegWrapper:
         with torch.no_grad():
             batch_size = image.shape[0]
             results = []
-            
+
             for i in range(batch_size):
                 img_tensor = batch["image_rgb"][i]
                 img_processed = batch["image"][i]
                 img_np = (img_tensor.permute(1, 2, 0).cpu().numpy() * 255.0).astype(np.uint8)
                 H, W = img_np.shape[:2]
+                sample_name = None
+                if batch is not None and "name" in batch:
+                    name_value = batch["name"][i]
+                    sample_name = name_value if isinstance(name_value, str) else str(name_value)
+
                 self.predictor.set_image(img_np)
 
                 # 使用 GT mask 转换为 box prompt
                 label_map = batch['label'][i][0].cpu().numpy()
                 label_bin = (label_map > 0.5).astype(np.uint8)
+                label_sum = int(label_bin.sum())
                 box = _mask_to_box(label_bin, pad=4)
+
+                # 调试输出：观察 mask 是否为空、box 是否合理
+                if i < 3 or box is None or (i % 200 == 0):
+                    box_str = None if box is None else box.tolist()
+                    print(
+                        f"[PromptDebug] idx={i} name={sample_name} "
+                        f"label_sum={label_sum} box={box_str} fallback={box is None}"
+                    )
 
                 # 如果 mask 为空，就退回到中心点提示
                 point_coords = None
@@ -144,10 +158,10 @@ class MedSAM2SegWrapper:
                 best_mask = masks[np.argmax(scores)]
                 mask_tensor = torch.from_numpy(best_mask).float().unsqueeze(0).to(self.device)
                 results.append(mask_tensor)
-            
+
             # 合并结果批次
             mask_pred = torch.stack(results, dim=0)
-            
+
             return mask_pred
     
     def eval(self):
