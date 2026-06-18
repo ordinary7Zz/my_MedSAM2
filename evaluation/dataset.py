@@ -77,24 +77,49 @@ class Normalize(object):
         }
 
 
+
+
+def _stem(path):
+    return os.path.splitext(os.path.basename(path))[0]
+
+
+def _collect_files(root):
+    allowed_exts = {
+        '.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.webp',
+        '.JPG', '.JPEG', '.PNG', '.BMP', '.TIF', '.TIFF', '.WEBP',
+    }
+    files = []
+    for name in os.listdir(root):
+        path = os.path.join(root, name)
+        if os.path.isfile(path) and os.path.splitext(name)[1] in allowed_exts:
+            files.append(path)
+    return sorted(files)
+
+
+def _pair_by_stem(image_root, gt_root):
+    image_map = {}
+    for path in _collect_files(image_root):
+        key = _stem(path)
+        image_map.setdefault(key, path)
+
+    gt_map = {}
+    for path in _collect_files(gt_root):
+        key = _stem(path)
+        gt_map.setdefault(key, path)
+
+    common = sorted(set(image_map) & set(gt_map))
+    return [(image_map[key], gt_map[key]) for key in common]
+
+
 # -------------------------
 # 主 Dataset（支持 image / image_rgb 分流）
 # -------------------------
 
 class FullDataset(Dataset):
     def __init__(self, image_root, gt_root, size, mode):
-        self.images = sorted([
-            os.path.join(image_root, f)
-            for f in os.listdir(image_root)
-            if f.lower().endswith(('.jpg', '.png'))
-        ])
-        self.gts = sorted([
-            os.path.join(gt_root, f)
-            for f in os.listdir(gt_root)
-            if f.lower().endswith(('.jpg', '.png'))
-        ])
-
-        assert len(self.images) == len(self.gts), "Image/GT 数量不匹配"
+        self.pairs = _pair_by_stem(image_root, gt_root)
+        if not self.pairs:
+            raise ValueError("No matching image/mask pairs found by basename")
 
         base_tf = [
             Resize((size, size)),
@@ -111,13 +136,14 @@ class FullDataset(Dataset):
         self.normalize = Normalize()
 
     def __len__(self):
-        return len(self.images)
+        return len(self.pairs)
 
     def __getitem__(self, idx):
-        image = self.rgb_loader(self.images[idx])
-        label = self.binary_loader(self.gts[idx])
+        image_path, gt_path = self.pairs[idx]
+        image = self.rgb_loader(image_path)
+        label = self.binary_loader(gt_path)
 
-        name = os.path.splitext(os.path.basename(self.images[idx]))[0]
+        name = _stem(image_path)
 
         data = {'image': image, 'label': label, 'name': name}
         data = self.base_transform(data)
@@ -154,25 +180,19 @@ class FullDataset(Dataset):
 
 class TestDataset:
     def __init__(self, image_root, gt_root, size):
-        self.images = sorted([
-            os.path.join(image_root, f)
-            for f in os.listdir(image_root)
-            if f.lower().endswith(('.jpg', '.png'))
-        ])
-        self.gts = sorted([
-            os.path.join(gt_root, f)
-            for f in os.listdir(gt_root)
-            if f.lower().endswith('.png')
-        ])
+        self.pairs = _pair_by_stem(image_root, gt_root)
+        if not self.pairs:
+            raise ValueError("No matching image/mask pairs found by basename")
 
         self.size = size
         self.index = 0
 
     def load_data(self):
-        image = self.rgb_loader(self.images[self.index])
-        label = self.binary_loader(self.gts[self.index])
+        image_path, gt_path = self.pairs[self.index]
+        image = self.rgb_loader(image_path)
+        label = self.binary_loader(gt_path)
 
-        name = os.path.basename(self.images[self.index])
+        name = _stem(image_path)
 
         image = F.resize(image, (self.size, self.size), interpolation=InterpolationMode.BILINEAR)
         label = F.resize(label, (self.size, self.size), interpolation=InterpolationMode.NEAREST)
