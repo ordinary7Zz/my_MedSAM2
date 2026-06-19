@@ -93,8 +93,9 @@ def process_dataset(model, image_path, gt_path, save_base_path, dataset_name, de
     
     model = model.to(device)
     
-    # 加载测试数据集，使用与训练时相同的尺寸
-    target_size = 224  
+    # 加载测试数据集，使用与 SAM2 模型匹配的尺寸（image_size=512）
+    # 注意：SAM2 内部会将输入 resize 到 512x512，输入 224 会导致先缩小再放大，严重损失信息
+    target_size = 512  
     print(f"Loading dataset with FullDataset using size: {target_size}x{target_size}")
     test_dataset = FullDataset(image_path, gt_path, target_size, mode='val')
     

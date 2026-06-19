@@ -109,7 +109,6 @@ class MedSAM2SegWrapper:
 
             for i in range(batch_size):
                 img_tensor = batch["image_rgb"][i]
-                img_processed = batch["image"][i]
                 img_np = (img_tensor.permute(1, 2, 0).cpu().numpy() * 255.0).astype(np.uint8)
                 H, W = img_np.shape[:2]
                 sample_name = None
@@ -130,7 +129,8 @@ class MedSAM2SegWrapper:
                     box_str = None if box is None else box.tolist()
                     print(
                         f"[PromptDebug] idx={i} name={sample_name} "
-                        f"label_sum={label_sum} box={box_str} fallback={box is None}"
+                        f"label_sum={label_sum} box={box_str} "
+                        f"img_shape=({H},{W}) fallback={box is None}"
                     )
 
                 # 如果 mask 为空，就退回到中心点提示
@@ -142,9 +142,10 @@ class MedSAM2SegWrapper:
                     point_labels = np.array([1], dtype=np.int32)
 
                 # 使用 box prompt 进行推理（fallback 为中心点）
+                # 注意：使用 return_logits=True 以返回 logits，与 metrics.py 中的 sigmoid 配合
                 predict_kwargs = dict(
                     multimask_output=False,
-                    return_logits=False,
+                    return_logits=True,
                     normalize_coords=True,
                 )
                 if box is not None:
