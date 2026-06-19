@@ -1,4 +1,49 @@
+"""
+==============================================================================
+MedSAM2 分割推理 Wrapper（使用 Video Predictor 进行单帧推理）
+==============================================================================
+
+【运行流程概述】
+
+本文件实现了 MedSAM2SegWrapper 类，用于对 2D 医学图像进行分割推理。
+核心思路：将单张 2D 图像当作只有 1 帧的"视频"，使用 MedSAM2 的 Video Predictor
+进行推理。这是因为 MedSAM2 模型是作为 video model 训练的，必须使用 video predictor
+的完整 pipeline（包含 memory attention 等机制）才能获得有意义的预测结果。
+
+【推理步骤】
+
+1. 加载模型：
+   - 使用 build_sam2_video_predictor_npz 加载 MedSAM2 模型权重
+   - 配置路径通过 hydra 解析（需要绝对路径或 '//' 前缀）
+
+2. 图像预处理：
+   - 输入图像为 [0,1] 范围的 RGB tensor，shape [3, H, W]
+   - Resize 到模型期望的分辨率（通常 512×512）
+   - 使用 ImageNet 均值/标准差进行归一化
+
+3. 生成 Box Prompt：
+   - 从 GT mask 中提取前景像素的 bounding box
+   - 对 box 进行固定 padding（4像素）
+   - 【随机扩大】对 box 的每条边进行随机扩大（0~20%的目标尺寸），
+     模拟实际使用中 box 不完美贴合目标的情况，增强模型鲁棒性
+
+4. 推理：
+   - 初始化 inference state（单帧作为1帧视频）
+   - 通过 add_new_points_or_box 传入 box prompt
+   - 获取 mask logits 输出
+
+5. 后处理：
+   - 返回 raw logits（后续 metrics.py 中做 sigmoid + 阈值化）
+
+6. 调试（可选）：
+   - 前几个样本保存 4 列对比图：原图、GT mask、GT+box 叠加、SAM2 预测
+   - 打印 logits 的值域范围信息
+
+==============================================================================
+"""
+
 import os
+import random
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -64,6 +109,16 @@ def sample_uniformly(y_coords, x_coords, num_samples):
 
 
 def _mask_to_box(mask_bin: np.ndarray, pad: int = 4) -> Optional[np.ndarray]:
+    """
+    从二值 mask 中提取 bounding box。
+    
+    参数:
+        mask_bin: 二值 mask，shape [H, W]，前景为1，背景为0
+        pad: 固定 padding 像素数（在随机扩大之前先加的基础 padding）
+    
+    返回:
+        box: [x0, y0, x1, y1] 格式的 numpy 数组，或 None（如果 mask 为空）
+    """
     if mask_bin.sum() == 0:
         return None
     ys, xs = np.where(mask_bin > 0)
@@ -75,6 +130,42 @@ def _mask_to_box(mask_bin: np.ndarray, pad: int = 4) -> Optional[np.ndarray]:
     x1 = min(W - 1, x1 + pad)
     y1 = min(H - 1, y1 + pad)
     return np.array([x0, y0, x1, y1], dtype=np.float32)
+
+
+def _random_expand_box(box: np.ndarray, img_h: int, img_w: int,
+                       max_expand_ratio: float = 0.2) -> np.ndarray:
+    """
+    对 bounding box 进行随机扩大。
+    
+    模拟实际使用场景中，用户/检测器提供的 box 不会完美贴合目标边界的情况。
+    每条边独立进行随机扩大，扩大量为目标宽/高的 0~max_expand_ratio 倍。
+    
+    参数:
+        box: [x0, y0, x1, y1] 格式的 numpy 数组
+        img_h: 图像高度（用于 clamp 边界）
+        img_w: 图像宽度（用于 clamp 边界）
+        max_expand_ratio: 最大扩大比例，默认 0.2（即每条边最多扩大目标尺寸的 20%）
+    
+    返回:
+        expanded_box: 随机扩大后的 [x0, y0, x1, y1] numpy 数组
+    """
+    x0, y0, x1, y1 = box
+    box_w = x1 - x0
+    box_h = y1 - y0
+
+    # 每条边独立随机扩大 [0, max_expand_ratio * 对应方向尺寸]
+    expand_left = random.uniform(0, max_expand_ratio) * box_w
+    expand_right = random.uniform(0, max_expand_ratio) * box_w
+    expand_top = random.uniform(0, max_expand_ratio) * box_h
+    expand_bottom = random.uniform(0, max_expand_ratio) * box_h
+
+    # 扩大 box 并 clamp 到图像边界内
+    new_x0 = max(0, x0 - expand_left)
+    new_y0 = max(0, y0 - expand_top)
+    new_x1 = min(img_w - 1, x1 + expand_right)
+    new_y1 = min(img_h - 1, y1 + expand_bottom)
+
+    return np.array([new_x0, new_y0, new_x1, new_y1], dtype=np.float32)
 
 
 class MedSAM2SegWrapper:
@@ -172,6 +263,10 @@ class MedSAM2SegWrapper:
                 label_map = batch['label'][i][0].cpu().numpy()
                 label_bin = (label_map > 0.5).astype(np.uint8)
                 box = _mask_to_box(label_bin, pad=4)
+
+                # 随机扩大 box（模拟实际使用中 box 不完美贴合目标的情况）
+                if box is not None:
+                    box = _random_expand_box(box, H_orig, W_orig, max_expand_ratio=0.2)
 
                 # 使用 video predictor 的 add_new_points_or_box 推理
                 if box is not None:
