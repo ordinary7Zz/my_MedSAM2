@@ -3,8 +3,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from typing import Optional
-from sam2.build_sam import build_sam2
-from sam2.sam2_image_predictor import SAM2ImagePredictor
+from sam2.build_sam import build_sam2_video_predictor_npz
 
 def sample_uniformly(y_coords, x_coords, num_samples):
     """在高置信度区域内均匀采样点"""
@@ -89,84 +88,139 @@ class MedSAM2SegWrapper:
         # 设置设备
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # 加载MedSAM2模型
-        self.sam2_model = build_sam2(
+        # 使用 video predictor 加载 MedSAM2 模型
+        # MedSAM2 是作为 video model 训练的，必须使用 video predictor 推理
+        # 处理 config 路径：hydra 需要绝对路径或带 '//' 前缀的路径
+        if sam2_cfg and not sam2_cfg.startswith('//'):
+            # 如果是相对路径，转换为 hydra 可识别的绝对路径格式
+            import os as _os
+            script_dir = _os.path.dirname(_os.path.abspath(__file__))
+            # 向上一级到项目根目录，再拼接 sam2/ 前缀
+            project_root = _os.path.dirname(script_dir)
+            cfg_abs = _os.path.join(project_root, 'sam2', sam2_cfg)
+            if _os.path.exists(cfg_abs):
+                sam2_cfg = '//' + cfg_abs
+            else:
+                # 尝试直接在 sam2/configs 中查找
+                cfg_abs2 = _os.path.join(project_root, 'sam2', 'configs', sam2_cfg)
+                if _os.path.exists(cfg_abs2):
+                    sam2_cfg = '//' + cfg_abs2
+
+        self.predictor = build_sam2_video_predictor_npz(
             config_file=sam2_cfg,
-            checkpoint_path=checkpoint_path,
+            ckpt_path=checkpoint_path,
             device=self.device,
             mode="eval"
         )
+        self.image_size = self.predictor.image_size  # 通常为 512
 
-        # 创建图像预测器
-        self.predictor = SAM2ImagePredictor(self.sam2_model)
-
-        # 保留参数以兼容旧调用，但不再加载 DINO-UNet
+        # 保留参数以兼容旧调用
         self.dino_unet_model = None
     
+    def _preprocess_image(self, img_rgb_tensor):
+        """
+        将 [0,1] RGB tensor 预处理为 MedSAM2 video predictor 期望的格式。
+        输入: img_rgb_tensor shape [3, H, W], 值域 [0,1]
+        输出: normalized tensor shape [3, image_size, image_size]
+        """
+        img_mean = torch.tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(3, 1, 1)
+        img_std = torch.tensor([0.229, 0.224, 0.225], dtype=torch.float32).view(3, 1, 1)
+
+        # Resize to model's image_size if needed
+        C, H, W = img_rgb_tensor.shape
+        if H != self.image_size or W != self.image_size:
+            img = F.interpolate(
+                img_rgb_tensor.unsqueeze(0),
+                size=(self.image_size, self.image_size),
+                mode='bilinear',
+                align_corners=False
+            ).squeeze(0)
+        else:
+            img = img_rgb_tensor.clone()
+
+        # Normalize
+        img = (img - img_mean) / img_std
+        return img
+
     def __call__(self, image, batch=None):
-        with torch.no_grad():
+        autocast_ctx = torch.autocast("cuda", dtype=torch.bfloat16) if self.device.type == "cuda" else torch.nullcontext()
+        with torch.inference_mode(), autocast_ctx:
             batch_size = image.shape[0]
             results = []
 
             for i in range(batch_size):
-                img_tensor = batch["image_rgb"][i]
-                img_np = (img_tensor.permute(1, 2, 0).cpu().numpy() * 255.0).astype(np.uint8)
-                H, W = img_np.shape[:2]
+                img_tensor = batch["image_rgb"][i]  # [3, H, W], [0, 1]
+                H_orig, W_orig = img_tensor.shape[1], img_tensor.shape[2]
                 sample_name = None
                 if batch is not None and "name" in batch:
                     name_value = batch["name"][i]
                     sample_name = name_value if isinstance(name_value, str) else str(name_value)
 
-                self.predictor.set_image(img_np)
+                # 预处理图像为 video predictor 期望的格式
+                img_preprocessed = self._preprocess_image(img_tensor)  # [3, 512, 512]
+                # video predictor 期望 images shape: [num_frames, 3, H, W]
+                images = img_preprocessed.unsqueeze(0).to(self.device)  # [1, 3, 512, 512]
+
+                # 初始化 inference state（单帧视为1帧视频）
+                inference_state = self.predictor.init_state(
+                    images=images,
+                    video_height=H_orig,
+                    video_width=W_orig,
+                )
 
                 # 使用 GT mask 转换为 box prompt
                 label_map = batch['label'][i][0].cpu().numpy()
                 label_bin = (label_map > 0.5).astype(np.uint8)
-                label_sum = int(label_bin.sum())
                 box = _mask_to_box(label_bin, pad=4)
 
-
-                # 如果 mask 为空，就退回到中心点提示
-                point_coords = None
-                point_labels = None
-                if box is None:
-                    center_x, center_y = W // 2, H // 2
-                    point_coords = np.array([[center_x, center_y]], dtype=np.float32)
-                    point_labels = np.array([1], dtype=np.int32)
-
-                # 使用 box prompt 进行推理（fallback 为中心点）
-                # 注意：使用 return_logits=True 以返回 logits，与 metrics.py 中的 sigmoid 配合
-                predict_kwargs = dict(
-                    multimask_output=False,
-                    return_logits=True,
-                    normalize_coords=True,
-                )
+                # 使用 video predictor 的 add_new_points_or_box 推理
                 if box is not None:
-                    predict_kwargs["box"] = box[None, :].astype(np.float32)
+                    _, _, out_mask_logits = self.predictor.add_new_points_or_box(
+                        inference_state=inference_state,
+                        frame_idx=0,
+                        obj_id=1,
+                        box=box,  # [x0, y0, x1, y1] 原始像素坐标
+                        normalize_coords=True,
+                    )
                 else:
-                    predict_kwargs["point_coords"] = point_coords
-                    predict_kwargs["point_labels"] = point_labels
-
-                masks, scores, _ = self.predictor.predict(**predict_kwargs)
-
-                best_mask = masks[np.argmax(scores)]
-
-                # ---- 调试：前5个样本保存对比图 (GT mask + box 叠加 vs SAM2 预测) ----
-                if i < 5:
-                    print(f"[Debug] sample={sample_name} logits range: "
-                          f"min={best_mask.min():.4f}, max={best_mask.max():.4f}, "
-                          f"mean={best_mask.mean():.4f}, "
-                          f"sigmoid>0.5 sum={int((1/(1+np.exp(-best_mask.clip(-50,50))) > 0.5).sum())}, "
-                          f"logits>0 sum={int((best_mask > 0).sum())}")
-                    self._save_debug_comparison(
-                        img_np, label_bin, best_mask, box, sample_name, i
+                    # fallback: 使用中心点
+                    center_x, center_y = W_orig // 2, H_orig // 2
+                    points = np.array([[center_x, center_y]], dtype=np.float32)
+                    labels = np.array([1], dtype=np.int32)
+                    _, _, out_mask_logits = self.predictor.add_new_points_or_box(
+                        inference_state=inference_state,
+                        frame_idx=0,
+                        obj_id=1,
+                        points=points,
+                        labels=labels,
+                        normalize_coords=True,
                     )
 
-                mask_tensor = torch.from_numpy(best_mask).float().unsqueeze(0).to(self.device)
+                # out_mask_logits shape: [num_obj, 1, H_orig, W_orig]
+                # 取第一个 object 的 mask logits
+                mask_logits = out_mask_logits[0]  # [1, H_orig, W_orig]
+
+                # ---- 调试：前5个样本保存对比图 ----
+                if i < 5:
+                    mask_np = mask_logits.squeeze().cpu().numpy()
+                    img_np = (img_tensor.permute(1, 2, 0).cpu().numpy() * 255.0).astype(np.uint8)
+                    print(f"[Debug] sample={sample_name} logits range: "
+                          f"min={mask_np.min():.4f}, max={mask_np.max():.4f}, "
+                          f"mean={mask_np.mean():.4f}, "
+                          f"(logits>0) sum={int((mask_np > 0).sum())}")
+                    self._save_debug_comparison(
+                        img_np, label_bin, mask_np, box, sample_name, i
+                    )
+
+                # 返回 logits（metrics.py 中会做 sigmoid + threshold）
+                mask_tensor = mask_logits.float().to(self.device)  # [1, H, W]
                 results.append(mask_tensor)
 
+                # 重置 predictor state
+                self.predictor.reset_state(inference_state)
+
             # 合并结果批次
-            mask_pred = torch.stack(results, dim=0)
+            mask_pred = torch.stack(results, dim=0)  # [B, 1, H, W]
 
             return mask_pred
     
@@ -233,18 +287,13 @@ class MedSAM2SegWrapper:
 
     def eval(self):
         """设置模型为评估模式（兼容torch.nn.Module接口）"""
-        if hasattr(self, 'sam2_model'):
-            self.sam2_model.eval()
-        if hasattr(self, 'dino_unet_model') and self.dino_unet_model is not None:
-            self.dino_unet_model.eval()
+        if hasattr(self, 'predictor'):
+            self.predictor.eval()
         return self
     
     def to(self, device):
         """将模型移动到指定设备（兼容torch.nn.Module接口）"""
         self.device = device
-        if hasattr(self, 'sam2_model'):
-            self.sam2_model = self.sam2_model.to(device)
-            self.predictor = SAM2ImagePredictor(self.sam2_model)
-        if hasattr(self, 'dino_unet_model') and self.dino_unet_model is not None:
-            self.dino_unet_model = self.dino_unet_model.to(device)
+        if hasattr(self, 'predictor'):
+            self.predictor = self.predictor.to(device)
         return self
