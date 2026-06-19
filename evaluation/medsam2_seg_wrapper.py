@@ -124,14 +124,6 @@ class MedSAM2SegWrapper:
                 label_sum = int(label_bin.sum())
                 box = _mask_to_box(label_bin, pad=4)
 
-                # 调试输出：观察 mask 是否为空、box 是否合理
-                if i < 3 or box is None or (i % 200 == 0):
-                    box_str = None if box is None else box.tolist()
-                    print(
-                        f"[PromptDebug] idx={i} name={sample_name} "
-                        f"label_sum={label_sum} box={box_str} "
-                        f"img_shape=({H},{W}) fallback={box is None}"
-                    )
 
                 # 如果 mask 为空，就退回到中心点提示
                 point_coords = None

@@ -251,29 +251,18 @@ class MedSAM2SegWrapperRefine:
                 # Optional mask prompt (if supported by predictor)
                 mask_input = dino_bin[None, :, :].astype(np.float32) if self.enable_mask_prompt else None
 
-            # ---- 3) normalize coordinates (recommended for SAM2) ----
-            # point coords: (N,2) in [x,y] pixel -> normalized to [0,1]
-            point_coords_norm = point_coords.copy()
-            point_coords_norm[:, 0] /= max(W, 1)
-            point_coords_norm[:, 1] /= max(H, 1)
-
-            box_norm = None
-            if box is not None:
-                box_norm = box.copy()
-                box_norm[:, 0] /= max(W, 1)
-                box_norm[:, 2] /= max(W, 1)
-                box_norm[:, 1] /= max(H, 1)
-                box_norm[:, 3] /= max(H, 1)
-
-            # ---- 4) predict ----
+            # ---- 3) predict ----
+            # 注意：normalize_coords=True 时，SAM2 内部会自动将像素坐标归一化
+            # 因此直接传入原始像素坐标即可，不要手动归一化（否则会 double normalization）
             predict_kwargs = dict(
-                box=box_norm,
+                point_coords=point_coords,
+                point_labels=point_labels,
                 multimask_output=False,
                 return_logits=False,
                 normalize_coords=True,
             )
-            if box_norm is not None:
-                predict_kwargs["box"] = box_norm
+            if box is not None:
+                predict_kwargs["box"] = box
 
             # mask prompt is optional & may not be supported depending on SAM2ImagePredictor version
             if mask_input is not None:
