@@ -24,7 +24,7 @@ MedSAM2 分割推理 Wrapper（使用 Video Predictor 进行单帧推理）
 3. 生成 Box Prompt：
    - 从 GT mask 中提取前景像素的 bounding box
    - 对 box 进行固定 padding（4像素）
-   - 【随机扩大】对 box 的每条边进行随机扩大（0~20%的目标尺寸），
+   - 【随机扩大】对 box 的每条边进行随机扩大（0~5%的目标尺寸），
      模拟实际使用中 box 不完美贴合目标的情况，增强模型鲁棒性
 
 4. 推理：
@@ -144,7 +144,7 @@ def _random_expand_box(box: np.ndarray, img_h: int, img_w: int,
         box: [x0, y0, x1, y1] 格式的 numpy 数组
         img_h: 图像高度（用于 clamp 边界）
         img_w: 图像宽度（用于 clamp 边界）
-        max_expand_ratio: 最大扩大比例，默认 0.2（即每条边最多扩大目标尺寸的 20%）
+        max_expand_ratio: 最大扩大比例，默认 0.05（即每条边最多扩大目标尺寸的 5%）
     
     返回:
         expanded_box: 随机扩大后的 [x0, y0, x1, y1] numpy 数组
@@ -266,7 +266,7 @@ class MedSAM2SegWrapper:
 
                 # 随机扩大 box（模拟实际使用中 box 不完美贴合目标的情况）
                 if box is not None:
-                    box = _random_expand_box(box, H_orig, W_orig, max_expand_ratio=0.2)
+                    box = _random_expand_box(box, H_orig, W_orig, max_expand_ratio=0.05)
 
                 # 使用 video predictor 的 add_new_points_or_box 推理
                 if box is not None:
