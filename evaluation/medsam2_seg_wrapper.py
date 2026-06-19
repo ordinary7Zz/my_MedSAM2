@@ -153,6 +153,11 @@ class MedSAM2SegWrapper:
 
                 # ---- 调试：前5个样本保存对比图 (GT mask + box 叠加 vs SAM2 预测) ----
                 if i < 5:
+                    print(f"[Debug] sample={sample_name} logits range: "
+                          f"min={best_mask.min():.4f}, max={best_mask.max():.4f}, "
+                          f"mean={best_mask.mean():.4f}, "
+                          f"sigmoid>0.5 sum={int((1/(1+np.exp(-best_mask.clip(-50,50))) > 0.5).sum())}, "
+                          f"logits>0 sum={int((best_mask > 0).sum())}")
                     self._save_debug_comparison(
                         img_np, label_bin, best_mask, box, sample_name, i
                     )
@@ -206,8 +211,13 @@ class MedSAM2SegWrapper:
             axes[2].set_title("GT+Box (no box, fallback)")
         axes[2].axis('off')
 
-        # 4) SAM2 预测结果
-        pred_bin = (pred_mask > 0.5).astype(np.uint8) if pred_mask.dtype != bool else pred_mask.astype(np.uint8)
+        # 4) SAM2 预测结果（注意：return_logits=True 时输出是 logits，需 sigmoid 后再阈值化）
+        if pred_mask.dtype == bool:
+            pred_bin = pred_mask.astype(np.uint8)
+        else:
+            # 对 logits 做 sigmoid 再阈值化
+            pred_sigmoid = 1.0 / (1.0 + np.exp(-np.clip(pred_mask, -50, 50)))
+            pred_bin = (pred_sigmoid > 0.5).astype(np.uint8)
         axes[3].imshow(img_np)
         pred_overlay = np.zeros((*pred_bin.shape, 4))
         pred_overlay[pred_bin > 0] = [1, 0, 0, 0.4]  # 红色半透明
