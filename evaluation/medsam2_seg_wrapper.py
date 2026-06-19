@@ -295,17 +295,17 @@ class MedSAM2SegWrapper:
                 # 取第一个 object 的 mask logits
                 mask_logits = out_mask_logits[0]  # [1, H_orig, W_orig]
 
-                # ---- 调试：前5个样本保存对比图 ----
-                if i < 5:
-                    mask_np = mask_logits.squeeze().cpu().numpy()
-                    img_np = (img_tensor.permute(1, 2, 0).cpu().numpy() * 255.0).astype(np.uint8)
-                    print(f"[Debug] sample={sample_name} logits range: "
-                          f"min={mask_np.min():.4f}, max={mask_np.max():.4f}, "
-                          f"mean={mask_np.mean():.4f}, "
-                          f"(logits>0) sum={int((mask_np > 0).sum())}")
-                    self._save_debug_comparison(
-                        img_np, label_bin, mask_np, box, sample_name, i
-                    )
+                # # ---- 调试：前5个样本保存对比图 ----
+                # if i < 5:
+                #     mask_np = mask_logits.squeeze().cpu().numpy()
+                #     img_np = (img_tensor.permute(1, 2, 0).cpu().numpy() * 255.0).astype(np.uint8)
+                #     print(f"[Debug] sample={sample_name} logits range: "
+                #           f"min={mask_np.min():.4f}, max={mask_np.max():.4f}, "
+                #           f"mean={mask_np.mean():.4f}, "
+                #           f"(logits>0) sum={int((mask_np > 0).sum())}")
+                #     self._save_debug_comparison(
+                #         img_np, label_bin, mask_np, box, sample_name, i
+                #     )
 
                 # 返回 logits（metrics.py 中会做 sigmoid + threshold）
                 mask_tensor = mask_logits.float().to(self.device)  # [1, H, W]
@@ -378,7 +378,7 @@ class MedSAM2SegWrapper:
         fname = f"debug_{idx}_{sample_name}.png"
         plt.savefig(os.path.join(debug_dir, fname), dpi=100, bbox_inches='tight')
         plt.close(fig)
-        print(f"[Debug] Saved: {os.path.join(debug_dir, fname)}")
+        # print(f"[Debug] Saved: {os.path.join(debug_dir, fname)}")
 
     def eval(self):
         """设置模型为评估模式（兼容torch.nn.Module接口）"""
