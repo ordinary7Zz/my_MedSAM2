@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -149,6 +150,13 @@ class MedSAM2SegWrapper:
                 masks, scores, _ = self.predictor.predict(**predict_kwargs)
 
                 best_mask = masks[np.argmax(scores)]
+
+                # ---- 调试：前5个样本保存对比图 (GT mask + box 叠加 vs SAM2 预测) ----
+                if i < 5:
+                    self._save_debug_comparison(
+                        img_np, label_bin, best_mask, box, sample_name, i
+                    )
+
                 mask_tensor = torch.from_numpy(best_mask).float().unsqueeze(0).to(self.device)
                 results.append(mask_tensor)
 
@@ -157,6 +165,62 @@ class MedSAM2SegWrapper:
 
             return mask_pred
     
+    def _save_debug_comparison(self, img_np, label_bin, pred_mask, box, sample_name, idx):
+        """保存调试对比图：原图+GT mask+box 叠加 vs SAM2 预测 mask"""
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as patches
+
+        debug_dir = "./debug_box_prompt"
+        os.makedirs(debug_dir, exist_ok=True)
+
+        fig, axes = plt.subplots(1, 4, figsize=(20, 5))
+
+        # 1) 原始图像
+        axes[0].imshow(img_np)
+        axes[0].set_title(f"Input Image\n{sample_name}")
+        axes[0].axis('off')
+
+        # 2) GT mask（二值）
+        axes[1].imshow(label_bin, cmap='gray', vmin=0, vmax=1)
+        axes[1].set_title(f"GT Mask\nsum={label_bin.sum()}")
+        axes[1].axis('off')
+
+        # 3) 原图 + GT mask 叠加 + box
+        axes[2].imshow(img_np)
+        # 半透明 GT mask 叠加
+        gt_overlay = np.zeros((*label_bin.shape, 4))
+        gt_overlay[label_bin > 0] = [0, 1, 0, 0.4]  # 绿色半透明
+        axes[2].imshow(gt_overlay)
+        # 绘制 box
+        if box is not None:
+            x0, y0, x1, y1 = box
+            rect = patches.Rectangle(
+                (x0, y0), x1 - x0, y1 - y0,
+                linewidth=2, edgecolor='red', facecolor='none'
+            )
+            axes[2].add_patch(rect)
+            axes[2].set_title(f"GT+Box\nbox=[{x0:.0f},{y0:.0f},{x1:.0f},{y1:.0f}]")
+        else:
+            axes[2].set_title("GT+Box (no box, fallback)")
+        axes[2].axis('off')
+
+        # 4) SAM2 预测结果
+        pred_bin = (pred_mask > 0.5).astype(np.uint8) if pred_mask.dtype != bool else pred_mask.astype(np.uint8)
+        axes[3].imshow(img_np)
+        pred_overlay = np.zeros((*pred_bin.shape, 4))
+        pred_overlay[pred_bin > 0] = [1, 0, 0, 0.4]  # 红色半透明
+        axes[3].imshow(pred_overlay)
+        axes[3].set_title(f"SAM2 Pred\nsum={pred_bin.sum()}")
+        axes[3].axis('off')
+
+        plt.tight_layout()
+        fname = f"debug_{idx}_{sample_name}.png"
+        plt.savefig(os.path.join(debug_dir, fname), dpi=100, bbox_inches='tight')
+        plt.close(fig)
+        print(f"[Debug] Saved: {os.path.join(debug_dir, fname)}")
+
     def eval(self):
         """设置模型为评估模式（兼容torch.nn.Module接口）"""
         if hasattr(self, 'sam2_model'):
