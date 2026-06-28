@@ -19,7 +19,7 @@ scratch:
   base_lr: 5.0e-5                  # 微调学习率，可适当降低到 2e-5
   vision_lr: 3.0e-05               # 图像编码器学习率，可降低到 1e-5
   phases_per_epoch: 1
-  num_epochs: 30                   # 2D 数据通常 30~50 epoch 即可
+  num_epochs: 10                   # 2D 数据通常 30~50 epoch 即可
 
 dataset:
   folder: /mnt/wangbd8/workspace/DataSets/ThyroidAgent/TGVideo_PNG/train/npz   # ★ 替换为你的 npz 数据集绝对路径
