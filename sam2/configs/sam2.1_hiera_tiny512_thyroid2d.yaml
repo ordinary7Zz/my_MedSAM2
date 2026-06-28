@@ -9,7 +9,7 @@
 
 user:
   data_folder: /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TGVideo_PNG/train/npz/npz_img     # 训练 NPZ 数据集的绝对路径
-  checkpoint:   ./checkpoints/medsam2_latest.pt      # MedSAM2 预训练权重路径
+  checkpoint: /mnt/wangbd8/workspace/ThyroidAgent/MedSAM2/checkpoints/MedSAM2_latest.pt      # MedSAM2 预训练权重路径
 
 # ============================================================================
 
