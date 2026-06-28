@@ -215,26 +215,15 @@ bash download.sh
 sam2/configs/sam2.1_hiera_tiny512_thyroid2d.yaml
 ```
 
-你**只需修改以下 2 处**：
-
-| 行号 | 参数 | 修改为 |
-|------|------|--------|
-| 第 215 行 | `video_dataset.folder` | 你的 NPZ 数据集绝对路径 |
-| 第 316 行 | `checkpoint_path` | 微调起点的权重路径 |
-
-示例（假设 NPZ 在 `/data/thyroid/train_npz`）：
+你**只需修改文件最顶部的 2 行**：
 
 ```yaml
-# 第 215 行 — NPZ 数据集路径
-video_dataset:
-  _target_: training.dataset.vos_raw_dataset.NPZRawDataset
-  folder: /data/thyroid/train_npz
-
-# 第 316 行 — 微调起点权重（MedSAM2 预训练权重）
-checkpoint_path: checkpoints/medsam2_latest.pt
+user:
+  data_folder: /PATH/TO/YOUR/NPZ/DIRECTORY    # 改为你的 NPZ 数据集绝对路径
+  checkpoint:   /PATH/TO/medsam2_latest.pt     # 改为你的 MedSAM2 权重路径
 ```
 
-其余参数已预设为 2D 任务最优值，无需修改。
+文件中其余位置通过 `${user.data_folder}` 和 `${user.checkpoint}` 自动引用，无需修改。
 
 #### 配置文件关键参数一览
 

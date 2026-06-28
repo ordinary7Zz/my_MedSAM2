@@ -1,13 +1,16 @@
 # @package _global_
 # ============================================================================
 # MedSAM2 2D 甲状腺超声图像分割 — 微调配置文件
-# 
-# 基于原有的 CT FLARE_RECIST 配置修改，适配 2D 独立图像的分割微调。
-# 核心改动：
-#   - num_frames=1（每张 2D 图像是一个独立的 1 帧 "视频"）
-#   - max_num_objects=1（每张图像通常只有一个结节）
-#   - 只使用 box prompt，关闭 iterative correction
-#   - 使用 MedSAM2 checkpoint 继续微调，而非从 SAM2.1 开始
+# ============================================================================
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║ ★ 使用前只需修改以下 2 个路径，其余参数均无需改动                     ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+user:
+  data_folder: /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TGVideo_PNG/train/npz/npz_img     # 训练 NPZ 数据集的绝对路径
+  checkpoint:   ./checkpoints/medsam2_latest.pt      # MedSAM2 预训练权重路径
+
 # ============================================================================
 
 scratch:
@@ -20,10 +23,6 @@ scratch:
   vision_lr: 3.0e-05               # 图像编码器学习率，可降低到 1e-5
   phases_per_epoch: 1
   num_epochs: 10                   # 2D 数据通常 30~50 epoch 即可
-
-dataset:
-  folder: /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TGVideo_PNG/train/npz/npz_img   # ★ 替换为你的 npz 数据集绝对路径
-  multiplier: 1
 
 # 数据增强：继承原配置，适用于超声图像
 vos:
@@ -212,7 +211,7 @@ trainer:
               training: true
               video_dataset:
                 _target_: training.dataset.vos_raw_dataset.NPZRawDataset
-                folder: /path/to/your/thyroid_train_npz   # ★ 替换为你的路径
+                folder: ${user.data_folder}
               sampler:
                 _target_: training.dataset.vos_sampler.RandomUniformSampler
                 num_frames: ${scratch.num_frames}
@@ -300,7 +299,6 @@ trainer:
     log_dir: ${launcher.experiment_log_dir}/logs
     log_freq: 10
 
-  # ★ 微调：从 MedSAM2 预训练权重加载（而非 SAM2.1 原始权重）
   checkpoint:
     save_dir: ${launcher.experiment_log_dir}/checkpoints
     save_freq: 5
@@ -313,7 +311,7 @@ trainer:
 
       state_dict:
         _target_: training.utils.checkpoint_utils.load_checkpoint_and_apply_kernels
-        checkpoint_path: checkpoints/medsam2_latest.pt  # ★ 替换为你的 MedSAM2 checkpoint 路径
+        checkpoint_path: ${user.checkpoint}
         ckpt_state_dict_keys: ['model']
 
 launcher:
