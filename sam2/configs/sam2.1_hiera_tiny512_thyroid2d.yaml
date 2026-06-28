@@ -22,7 +22,7 @@ scratch:
   num_epochs: 10                   # 2D 数据通常 30~50 epoch 即可
 
 dataset:
-  folder: /mnt/wangbd8/workspace/DataSets/ThyroidAgent/TGVideo_PNG/train/npz   # ★ 替换为你的 npz 数据集绝对路径
+  folder: /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TGVideo_PNG/train/npz/npz_img   # ★ 替换为你的 npz 数据集绝对路径
   multiplier: 1
 
 # 数据增强：继承原配置，适用于超声图像
