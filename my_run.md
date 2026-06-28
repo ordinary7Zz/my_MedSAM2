@@ -102,9 +102,9 @@ print(data.keys())   # ['imgs', 'gts']
 
 ```bash
 python png_to_npz.py \
-    --image_dir /path/to/images/ \
-    --mask_dir /path/to/masks/  \
-    --output_dir /path/to/train_npz/
+    --image_dir /mnt/wangbd8/workspace/DataSets/ThyroidAgent/TGVideo_PNG/train/image \
+    --mask_dir /mnt/wangbd8/workspace/DataSets/ThyroidAgent/TGVideo_PNG/train/mask  \
+    --output_dir /mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TGVideo_PNG/train/npz/npz_MedSAM2
 ```
 
 脚本自动按文件名 stem 匹配 image-mask pair，每对生成一个独立的 `.npz` 文件。
