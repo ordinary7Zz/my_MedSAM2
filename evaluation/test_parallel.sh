@@ -5,7 +5,7 @@
 CUDA_VISIBLE_DEVICES="1"
 
 # Model checkpoint path
-CHECKPOINT_PATH="/mnt/wangbd8/workspace/ThyroidAgent/MedSAM2/checkpoints/MedSAM2_latest.pt"
+CHECKPOINT_PATH="/mnt/wangbd8/workspace/ThyroidAgent/MedSAM2/my_finetune/MedSAM2_TG_Video/checkpoints/checkpoint_10.pt"
 
 # Configure multiple test dataset paths
 # 测试数据集名称数组
@@ -48,13 +48,13 @@ if [ ${#TEST_DATASET_NAMES[@]} -ne ${#TEST_IMAGE_PATHS[@]} ] || [ ${#TEST_DATASE
 fi
 
 # Prediction results save path
-SAVE_PATH="./predictions/MedSAM2"
+SAVE_PATH="./predictions/finetune/TG_Video"
 
 # Whether to save prediction results (true/false)
 SAVE_RESULTS="false"
 
 # Log directory
-LOG_DIR="./logs/test_logs/MedSAM2"
+LOG_DIR="./logs/test_logs/finetune/TG_Video"
 
 # ---------------------- Execution ----------------------
 # Set CUDA environment variable
