@@ -10,35 +10,17 @@ CHECKPOINT_PATH="/mnt/wangbd8/workspace/ThyroidAgent/MedSAM2/my_finetune/MedSAM2
 # Configure multiple test dataset paths
 # 测试数据集名称数组
 TEST_DATASET_NAMES=(
-    "FinalData"
-    "Augtrain"
-    "TN3K"
-    "ThyroidXL"
-    "PKTN"
-    "TN5K"
-    "DDTI"
+    "TGVideo"
 )
 
 # 测试图像路径数组
 TEST_IMAGE_PATHS=(
-    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/finall_data/image/"
-    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/augtrain_PNG/image/"
-    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TN3K/test/images/"
-    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/ThyroidXL/test/images/"
-    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/PKTN/test/images/"
-    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TN5K/test/images/"
-    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/DDTI/test/images/"
+    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TGVideo_PNG/test/image/"
 )
 
 # 测试掩码路径数组
 TEST_MASK_PATHS=(
-    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/finall_data/mask/"
-    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/augtrain_PNG/mask/"
-    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TN3K/test/masks/"
-    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/ThyroidXL/test/masks/"
-    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/PKTN/test/masks/"
-    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TN5K/test/masks/"
-    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/DDTI/test/masks/"
+    "/mnt/wangbd8/workspace/DataSets/ThyroidAgent/train_val_test/TGVideo_PNG/test/mask/"
 )
 
 # Ensure arrays have the same length
@@ -48,13 +30,13 @@ if [ ${#TEST_DATASET_NAMES[@]} -ne ${#TEST_IMAGE_PATHS[@]} ] || [ ${#TEST_DATASE
 fi
 
 # Prediction results save path
-SAVE_PATH="./predictions/finetune/TG_Video"
+SAVE_PATH="./predictions/finetune/TGVideo"
 
 # Whether to save prediction results (true/false)
 SAVE_RESULTS="false"
 
 # Log directory
-LOG_DIR="./logs/test_logs/finetune/TG_Video"
+LOG_DIR="./logs/test_logs/TGVideo"
 
 # ---------------------- Execution ----------------------
 # Set CUDA environment variable
