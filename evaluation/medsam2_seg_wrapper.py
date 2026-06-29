@@ -175,9 +175,11 @@ class MedSAM2SegWrapper:
         checkpoint_path=None,
         device=None,
         dino_unet_ckpt=None,
+        use_gt_box=False,
     ):
         # 设置设备
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.use_gt_box = use_gt_box  # True: GT mask→box; False: 全图作为box
 
         # 使用 video predictor 加载 MedSAM2 模型
         # MedSAM2 是作为 video model 训练的，必须使用 video predictor 推理
@@ -259,14 +261,18 @@ class MedSAM2SegWrapper:
                     video_width=W_orig,
                 )
 
-                # 使用 GT mask 转换为 box prompt
-                label_map = batch['label'][i][0].cpu().numpy()
-                label_bin = (label_map > 0.5).astype(np.uint8)
-                box = _mask_to_box(label_bin, pad=4)
-
-                # 随机扩大 box（模拟实际使用中 box 不完美贴合目标的情况）
-                if box is not None:
-                    box = _random_expand_box(box, H_orig, W_orig, max_expand_ratio=0.05)
+                # 根据 use_gt_box 参数选择 box prompt 策略
+                if self.use_gt_box:
+                    # 使用 GT mask 转换为 box prompt
+                    label_map = batch['label'][i][0].cpu().numpy()
+                    label_bin = (label_map > 0.5).astype(np.uint8)
+                    box = _mask_to_box(label_bin, pad=4)
+                    # 随机扩大 box（模拟实际使用中 box 不完美贴合目标的情况）
+                    if box is not None:
+                        box = _random_expand_box(box, H_orig, W_orig, max_expand_ratio=0.05)
+                else:
+                    # 使用全图作为 box prompt
+                    box = np.array([0, 0, W_orig - 1, H_orig - 1], dtype=np.float32)
 
                 # 使用 video predictor 的 add_new_points_or_box 推理
                 if box is not None:

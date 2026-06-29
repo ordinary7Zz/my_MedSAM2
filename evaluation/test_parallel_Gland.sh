@@ -38,6 +38,9 @@ SAVE_RESULTS="false"
 # Log directory
 LOG_DIR="./logs/test_logs/TGVideo"
 
+# Whether to use GT mask to compute box prompt (true: GT mask→random box; false: full image as box)
+USE_GT_BOX="false"
+
 # ---------------------- Execution ----------------------
 # Set CUDA environment variable
 if [ ! -z "$CUDA_VISIBLE_DEVICES" ]; then
@@ -74,6 +77,12 @@ for dataset_name in "${TEST_DATASET_NAMES[@]}"; do
     TEST_NAMES_ARGS+=("--test_dataset_names" "$dataset_name")
 done
 
+# Build use_gt_box argument
+USE_GT_BOX_ARG=()
+if [ "$USE_GT_BOX" = "true" ]; then
+    USE_GT_BOX_ARG+=("--use_gt_box")
+fi
+
 # Execute the test command
 CMD="python -u \"$SCRIPT_DIR/test_parallel.py\" \
     --checkpoint \"$CHECKPOINT_PATH\" \
@@ -81,6 +90,7 @@ CMD="python -u \"$SCRIPT_DIR/test_parallel.py\" \
     ${TEST_IMAGE_ARGS[@]} \
     ${TEST_MASK_ARGS[@]} \
     ${TEST_NAMES_ARGS[@]} \
+    ${USE_GT_BOX_ARG[@]} \
     --save_path \"$SAVE_PATH\" \
     --save_results \"$SAVE_RESULTS\" \
     --log_dir \"$LOG_DIR\""

@@ -171,6 +171,9 @@ def main():
                         help="CUDA visible devices setting")
     parser.add_argument("--log_dir", type=str, default="./logs",
                         help="Directory to save log files")
+    parser.add_argument("--use_gt_box", action="store_true", default=False,
+                        help="If set, use GT mask to compute a bounding box as prompt. "
+                             "Otherwise (default), use the full image as box prompt.")
     args = parser.parse_args()
     
     # Handle CUDA device settings
@@ -243,10 +246,14 @@ def main():
         model = MedSAM2SegWrapper(
             sam2_cfg=args.sam2_cfg,
             checkpoint_path=clean_path(args.checkpoint),
-            device=device
+            device=device,
+            use_gt_box=args.use_gt_box,
         )
         print("MedSAM2 model loaded.")
-        print("Prompt mode: using GT mask -> box prompt for MedSAM2.")
+        if args.use_gt_box:
+            print("Prompt mode: using GT mask -> random expanded box prompt for MedSAM2.")
+        else:
+            print("Prompt mode: using full image as box prompt for MedSAM2.")
     except Exception as e:
         print(f"Error initializing MedSAM2: {e}")
         return
