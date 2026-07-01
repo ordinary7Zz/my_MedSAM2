@@ -317,7 +317,7 @@ trainer:
 launcher:
   num_nodes: 1
   gpus_per_node: 1
-  experiment_log_dir: ./exp_log/MedSAM2_Thyroid2D
+  experiment_log_dir: ./exp_log/MedSAM2_Noudle
 
 submitit:
   partition: gpu_bwanggroup
