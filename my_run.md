@@ -275,6 +275,12 @@ CUDA_VISIBLE_DEVICES=0 python training/train.py \
     --use-cluster 0 \
     --num-gpus 1 \
     --num-nodes 1
+CUDA_VISIBLE_DEVICES=0 python training/train.py \
+    -c configs/sam2.1_hiera_tiny512_noudle.yaml \
+    --output-path ./my_finetune/MedSAM2_TG_Video \
+    --use-cluster 0 \
+    --num-gpus 1 \
+    --num-nodes 1
 ```
 
 ### 4.5 训练输出
